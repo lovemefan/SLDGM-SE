@@ -7,8 +7,9 @@ import torch
 from soundfile import write
 from torchaudio import load
 from tqdm import tqdm
-from sgmse.model import ScoreModel
-from sgmse.util.other import ensure_dir, pad_spec
+
+from sldgmse.model import ScoreModel
+from sldgmse.util.other import ensure_dir, pad_spec
 
 if __name__ == '__main__':
     parser = ArgumentParser()

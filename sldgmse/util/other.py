@@ -69,7 +69,7 @@ def hp_filter(signal, cut_off=80, order=10, sr=16000):
     return filtered
 
 def si_sdr(s, s_hat):
-    alpha = np.dot(s_hat, s)/np.linalg.norm(s)**2   
+    alpha = np.dot(s_hat, s)/np.linalg.norm(s)**2
     sdr = 10*np.log10(np.linalg.norm(alpha*s)**2/np.linalg.norm(
         alpha*s - s_hat)**2)
     return sdr

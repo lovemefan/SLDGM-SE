@@ -1,8 +1,8 @@
 import abc
 import torch
 
-from sgmse import sdes
-from sgmse.util.registry import Registry
+from sldgmse import sdes
+from sldgmse.util.registry import Registry
 
 
 CorrectorRegistry = Registry("Corrector")

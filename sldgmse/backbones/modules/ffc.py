@@ -75,9 +75,9 @@ class FourierUnit(nn.Module):
             0, 1, 3, 4, 2).contiguous()  # (batch, c, t, f/2+1, 2)
 
         ffted = torch.complex(ffted[..., 0], ffted[..., 1])
-        output = torch.fft.irfft(ffted, dim=2, norm=self.fft_norm)
+        ffted = torch.fft.irfft(ffted, dim=2, norm=self.fft_norm)
 
-        return output
+        return ffted
 
 
 class SpectralTransform(nn.Module):
@@ -127,6 +127,8 @@ class SpectralTransform(nn.Module):
             xs = 0
 
         output = self.conv2(x + output + xs)
+        del x, xs
+        torch.cuda.empty_cache()
 
         return output
 
@@ -201,7 +203,7 @@ class FFC_BN_ACT(nn.Module):
         super(FFC_BN_ACT, self).__init__()
         self.ffc = FFC(in_channels, out_channels, kernel_size,
                        ratio_gin, ratio_gout, stride, padding, dilation,
-                       groups, bias, enable_lfu, padding_type=padding_type, **kwargs)
+                       groups, bias, enable_lfu, **kwargs)
         lnorm = nn.Identity if ratio_gout == 1 else norm_layer
         gnorm = nn.Identity if ratio_gout == 0 else norm_layer
         global_channels = int(out_channels * ratio_gout)
@@ -236,7 +238,7 @@ class FFCResnetBlock(nn.Module):
                                 **conv_kwargs)
         self.inline = inline
 
-    def forward(self, x):
+    def forward(self, x, t_emb):
         if self.inline:
             x_l, x_g = x[:, :-self.conv1.ffc.global_in_num], x[:, -self.conv1.ffc.global_in_num:]
         else:
@@ -251,6 +253,9 @@ class FFCResnetBlock(nn.Module):
         out = x_l, x_g
         if self.inline:
             out = torch.cat(out, dim=1)
+
+        if t_emb is not None:
+            out += self.Dense_0(self.act(t_emb))
         return out
 
 

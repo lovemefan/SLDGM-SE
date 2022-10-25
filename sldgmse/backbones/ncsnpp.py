@@ -45,7 +45,7 @@ class NCSNpp(nn.Module):
     def __init__(self,
         scale_by_sigma = True,
         nonlinearity = 'swish',
-        nf = 128,
+        nf = 64,
         ch_mult = (1, 1, 2, 2, 2, 2, 2),
         num_res_blocks = 2,
         attn_resolutions = (16,),

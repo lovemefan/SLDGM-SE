@@ -7,11 +7,11 @@ import torch
 import pytorch_lightning as pl
 from torch_ema import ExponentialMovingAverage
 
-from sgmse import sampling
-from sgmse.sdes import SDERegistry
-from sgmse.backbones import BackboneRegistry
-from sgmse.util.inference import evaluate_model
-from sgmse.util.other import pad_spec
+from sldgmse import sampling
+from sldgmse.sdes import SDERegistry
+from sldgmse.backbones import BackboneRegistry
+from sldgmse.util.inference import evaluate_model
+from sldgmse.util.other import pad_spec
 
 
 class ScoreModel(pl.LightningModule):
@@ -45,6 +45,7 @@ class ScoreModel(pl.LightningModule):
         self.dnn = dnn_cls(**kwargs)
         # Initialize SDE
         sde_cls = SDERegistry.get_by_name(sde)
+        self.sde_type = sde
         self.sde = sde_cls(**kwargs)
         # Store hyperparams and save them
         self.lr = lr
@@ -106,15 +107,18 @@ class ScoreModel(pl.LightningModule):
         return loss
 
     def _step(self, batch, batch_idx):
-        x, y = batch
-        t = torch.rand(x.shape[0], device=x.device) * (self.sde.T - self.t_eps) + self.t_eps
-        mean, std = self.sde.marginal_prob(x, t, y)
-        z = torch.randn_like(x)  # i.i.d. normal distributed with var=0.5
-        sigmas = std[:, None, None, None]
-        perturbed_data = mean + sigmas * z
-        score = self(perturbed_data, t, y)
-        err = score * sigmas + z
-        loss = self._loss(err)
+        if self.sde_type != 'poission':
+            pass
+        else:
+            x, y = batch
+            t = torch.rand(x.shape[0], device=x.device) * (self.sde.T - self.t_eps) + self.t_eps
+            mean, std = self.sde.marginal_prob(x, t, y)
+            z = torch.randn_like(x)  # i.i.d. normal distributed with var=0.5
+            sigmas = std[:, None, None, None]
+            perturbed_data = mean + sigmas * z
+            score = self(perturbed_data, t, y)
+            err = score * sigmas + z
+            loss = self._loss(err)
         return loss
 
     def training_step(self, batch, batch_idx):

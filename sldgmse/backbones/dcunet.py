@@ -166,7 +166,7 @@ DCUNET_ARCHITECTURES = {
 class DCUNet(nn.Module):
     @staticmethod
     def add_argparse_args(parser):
-        parser.add_argument("--dcunet-architecture", type=str, default="DilDCUNet-v2", choices=DCUNET_ARCHITECTURES.keys(), help="The concrete DCUNet architecture. 'DilDCUNet-v2' by default.")
+        parser.add_argument("--dcunet-architecture", type=str, default="DCUNet-16", choices=DCUNET_ARCHITECTURES.keys(), help="The concrete DCUNet architecture. 'DilDCUNet-v2' by default.")
         parser.add_argument("--dcunet-time-embedding", type=str, choices=("gfp", "ds", "none"), default="gfp", help="Timestep embedding style. 'gfp' (Gaussian Fourier Projections) by default.")
         parser.add_argument("--dcunet-temb-layers-global", type=int, default=1, help="Number of global linear+activation layers for the time embedding. 1 by default.")
         parser.add_argument("--dcunet-temb-layers-local", type=int, default=1, help="Number of local (per-encoder/per-decoder) linear+activation layers for the time embedding. 1 by default.")
@@ -180,7 +180,7 @@ class DCUNet(nn.Module):
 
     def __init__(
         self,
-        dcunet_architecture: str = "DilDCUNet-v2",
+        dcunet_architecture: str = "DCUNet-20",
         dcunet_time_embedding: str = "gfp",
         dcunet_temb_layers_global: int = 2,
         dcunet_temb_layers_local: int = 1,

@@ -8,7 +8,7 @@ import pandas as pd
 
 from pystoi import stoi
 
-from sgmse.util.other import energy_ratios, mean_std
+from sldgmse.util.other import energy_ratios, mean_std
 
 
 if __name__ == '__main__':

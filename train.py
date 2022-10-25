@@ -2,16 +2,17 @@ import argparse
 from argparse import ArgumentParser
 
 import pytorch_lightning as pl
+import torch.autograd.profiler
 from pytorch_lightning.plugins import DDPPlugin
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 import wandb
 
-from sgmse.backbones.shared import BackboneRegistry
-from sgmse.data_module import SpecsDataModule
-from sgmse.sdes import SDERegistry
-from sgmse.model import ScoreModel
+from sldgmse.backbones.shared import BackboneRegistry
+from sldgmse.data_module import SpecsDataModule
+from sldgmse.sdes import SDERegistry
+from sldgmse.model import ScoreModel
 
 
 def get_argparse_groups(parser):
@@ -59,7 +60,7 @@ if __name__ == '__main__':
             **vars(arg_groups['ScoreModel']),
             **vars(arg_groups['SDE']),
             **vars(arg_groups['Backbone']),
-            **vars(arg_groups['DataModule'])
+            **vars(arg_groups['DataModule']),
         }
     )
 
@@ -84,12 +85,18 @@ if __name__ == '__main__':
     # Initialize the Trainer and the DataModule
     trainer = pl.Trainer.from_argparse_args(
         arg_groups['pl.Trainer'],
-        accelerator="cpu",
+        accelerator="gpu",
         # strategy=DDPPlugin(find_unused_parameters=False),
         logger=logger,
         log_every_n_steps=10, num_sanity_val_steps=0,
-        callbacks=callbacks
+        callbacks=callbacks,
+        auto_scale_batch_size=True,
+        auto_lr_find=True,
+        weights_save_path='/home/ubuntu/python-project/SLDGM-SE/checkpoints',
+        detect_anomaly=True,
+        accumulate_grad_batches=8,
     )
 
-    # Train model
+    model.eval()
+    # Train
     trainer.fit(model)

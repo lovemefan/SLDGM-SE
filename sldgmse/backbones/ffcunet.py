@@ -4,14 +4,14 @@
 # @Time      :2022/9/19 20:25
 # @Author    :lovemefan
 # @email     :lovemefan@outlook.com
-from sgmse.backbones import BackboneRegistry
+from sldgmse.backbones import BackboneRegistry
 import torch.nn as nn
 import torch
 import numpy as np
 
-from sgmse.backbones.dcunet import OnReIm, get_activation
-from sgmse.backbones.modules.ffc import FFC
-from sgmse.backbones.shared import GaussianFourierProjection, DiffusionStepEmbedding, ComplexLinear
+from sldgmse.backbones.dcunet import OnReIm, get_activation
+from sldgmse.backbones.modules.ffc import  FFC_BN_ACT
+from sldgmse.backbones.shared import GaussianFourierProjection, DiffusionStepEmbedding, ComplexLinear
 
 
 class FFCResidualBlocks(nn.Module):
@@ -19,23 +19,26 @@ class FFCResidualBlocks(nn.Module):
                  in_channels,
                  kernel_size,
                  alpha,
+                 t_emb_dim=None,
                  ):
         """
         Args:
             alpha: the radio of channels used in the global branch of the module
         """
         super(FFCResidualBlocks, self).__init__()
-        self.ffc_modules = nn.Sequential(
 
-        )
         self.alpha = alpha
-        self.ffc1 = FFC(in_channels, in_channels, kernel_size, alpha, alpha, padding=1)
-        self.ffc2 = FFC(in_channels, in_channels, kernel_size, alpha, alpha, padding=1)
 
-    def forward(self, x):
+        self.ffc1 = FFC_BN_ACT(in_channels, in_channels, kernel_size, alpha, alpha, padding=1)
+        self.ffc2 = FFC_BN_ACT(in_channels, in_channels, kernel_size, alpha, alpha, padding=1)
+
+        if t_emb_dim is not None:
+            self.Dense_0 = nn.Linear(t_emb_dim, in_channels)
+            self.act = nn.SiLU()
+
+    def forward(self, x, t_emb=None):
         residual = x
-        x = self.ffc1(x)
-        x = self.ffc2(x)
+        x_l, x_g = self.ffc2(self.ffc1(x))
 
         if type(residual) is tuple:
             channel = residual[0].size(1) + residual[1].size(1)
@@ -43,28 +46,40 @@ class FFCResidualBlocks(nn.Module):
             channel_l = channel - channel_g
             residual = torch.cat(residual, dim=1)
             residual = residual.split([channel_l, channel_g], dim=1)
-            return x[0] + residual[0], x[1] + residual[1]
+            if t_emb is not None:
+                t_emb = self.Dense_0(self.act(t_emb))[:, :, None, None]
+                x_l, x_g = torch.split(torch.concat((x_l, x_g), dim=1) + t_emb, (x_l.size()[1], x_g.size()[1]), dim=1)
+                # x_l += t_emb[:, :x_l.size()[1]]
+                # x_g += t_emb[:, x_l.size()[1]:]
+
+            return x_l + residual[0], x_g + residual[1]
         else:
             residual = torch.concat((residual, torch.zeros_like(residual)), dim=1)
             channel = residual.size(1)
             channel_g = int(self.alpha*channel)
             channel_l = channel - channel_g
-            return x[0] + residual[:, :channel_l, ...], x[1] + residual[:, channel_l:, ...]
+            if t_emb is not None:
+                t_emb = self.Dense_0(self.act(t_emb))[:, :, None, None]
+                x_l, x_g = torch.split(torch.concat((x_l, x_g), dim=1) + t_emb, (x_l.size()[1], x_g.size()[1]), dim=1)
+                # x_l += t_emb[:, :x_l.size()[1]]
+                # x_g += t_emb[:, x_l.size()[1]:]
+
+            return x_l + residual[:, :channel_l, ...], x_g + residual[:, channel_l:, ...]
 
 
 class DownSampleBlock(nn.Module):
-    def __init__(self, n, channel_in, channel_out, alpha):
+    def __init__(self, n, channel_in, channel_out, alpha, t_emb_dim):
         super(DownSampleBlock, self).__init__()
 
         self.ffc_residuals = nn.Sequential(
-            *[FFCResidualBlocks(channel_in, (3, 3), alpha) for _ in range(n)]
+            *[FFCResidualBlocks(channel_in, (3, 3), alpha, t_emb_dim=t_emb_dim) for _ in range(n)]
         )
         self.conv = nn.Conv2d(channel_in, channel_out, 1, stride=2)
 
-    def forward(self, x):
+    def forward(self, x, t_emb):
 
         for module in self.ffc_residuals:
-            x = module(x)
+            x = module(x, t_emb)
         x = torch.concat(x, dim=1)
         x = self.conv(x)
         x = x.chunk(2, dim=1)
@@ -72,21 +87,21 @@ class DownSampleBlock(nn.Module):
 
 
 class UpSampleBlock(nn.Module):
-    def __init__(self, n, channel_in, channel_out, alpha):
+    def __init__(self, n, channel_in, channel_out, alpha, t_emb_dim):
         super(UpSampleBlock, self).__init__()
         self.alpha = alpha
         self.convT = nn.ConvTranspose2d(channel_in, channel_out, 1, stride=2, output_padding=1)
         self.ffc_residuals = nn.Sequential(
-            *[FFCResidualBlocks(channel_out, (3, 3), alpha) for i in range(n)]
+            *[FFCResidualBlocks(channel_out, (3, 3), alpha, t_emb_dim=t_emb_dim) for i in range(n)]
         )
         self.conv = nn.Conv2d(channel_in, channel_out, 1)
 
-    def forward(self, x, residual):
+    def forward(self, x, t_emb, residual):
         x = self.convT(x)
         channel_g = int(x.size(1)*self.alpha)
         x = x.split([x.size(1) - channel_g, channel_g], dim=1)
         for module in self.ffc_residuals:
-            x = module(x)
+            x = module(x, t_emb)
 
         if type(residual) is not tuple:
             residual = residual, torch.zeros_like(residual)
@@ -106,10 +121,10 @@ class FFCUNET(nn.Module):
     def __init__(
             self,
             in_ch=32,
-            n=4,
+            n=2,
             k=4,
             time_embedding="gfp",
-            embed_dim: int = 128,
+            embed_dim: int = 256,
             activation: str = "silu",
             **unused_kwargs
     ):
@@ -123,15 +138,15 @@ class FFCUNET(nn.Module):
         """
         super(FFCUNET, self).__init__()
         self.alpha = np.linspace(.75, 0, k)
-        self.conv_in = nn.Conv2d(2, in_ch, (7, 7), padding=3)
+        self.conv_in = nn.Conv2d(4, in_ch, (7, 7), padding=3)
         self.down_sample = nn.ModuleList(
-            [DownSampleBlock(n, in_ch*2**i, in_ch*(2**(i+1)), self.alpha[i]) for i in range(1, k)]
+            [DownSampleBlock(n, in_ch*2**i, in_ch*(2**(i+1)), self.alpha[i], t_emb_dim=embed_dim) for i in range(1, k)]
         )
         self.ffc_residual_blocks = nn.Sequential(
             *[FFCResidualBlocks(in_ch*(2**k), (3, 3), 0.25) for i in range(n)]
         )
         self.up_sample = nn.ModuleList(
-            [UpSampleBlock(n, in_ch * (2 ** (i+1)), in_ch * 2 ** i, self.alpha[i]) for i in range(k-1, 0, -1)]
+            [UpSampleBlock(n, in_ch * (2 ** (i+1)), in_ch * 2 ** i, self.alpha[i], t_emb_dim=embed_dim) for i in range(k-1, 0, -1)]
         )
         self.conv_out = nn.Conv2d(in_ch*2, 2, (7, 7), padding=3)
 
@@ -147,8 +162,7 @@ class FFCUNET(nn.Module):
 
             for _ in range(2):
                 embed_ops += [
-                    ComplexLinear(embed_dim, embed_dim, complex_valued=True),
-                    OnReIm(get_activation(activation))
+                    nn.Linear(embed_dim, embed_dim),
                 ]
         self.embed = nn.Sequential(*embed_ops)
 
@@ -161,22 +175,28 @@ class FFCUNET(nn.Module):
             Tensor, of shape (batch, time) or (time).
         """
         t_embed = self.embed(t)
+
+        # Convert real and imaginary parts of (x,y) into four channel dimensions
+        x = torch.cat((x[:, [0], :, :].real, x[:, [0], :, :].imag,
+                       x[:, [1], :, :].real, x[:, [1], :, :].imag), dim=1)
+
         unet_residual = []
         x = self.conv_in(x)
         for module in self.down_sample:
             unet_residual.append(x)
-            x = module(x)
+            x = module(x, t_embed)
 
         x = self.ffc_residual_blocks(x)
 
         x = torch.concat(x, dim=1)
         for module in self.up_sample:
             residual = unet_residual.pop()
-            x = module(x, residual)
+            x = module(x, t_embed, residual)
             del residual
 
         x = self.conv_out(x)
-
+        x = torch.permute(x, (0, 2, 3, 1)).contiguous()
+        x = torch.view_as_complex(x)[:, None, :, :]
         return x
 
 

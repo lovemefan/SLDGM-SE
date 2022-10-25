@@ -1,35 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" serverName="zlf@222.197.214.101:22" remoteFilesAllowedToDisappearOnAutoupload="false">
+  <component name="PublishConfigData" autoUpload="Always" serverName="ubuntu@t4.lovemefan.top:22" remoteFilesAllowedToDisappearOnAutoupload="false">
     <serverData>
-      <paths name="shong@222.197.219.14:22 password">
+      <paths name="ubuntu@t4.lovemefan.top:22">
         <serverdata>
           <mappings>
-            <mapping deploy="/home/data/sgmse" local="$PROJECT_DIR$" />
-          </mappings>
-        </serverdata>
-      </paths>
-      <paths name="shong@222.197.219.14:22 password (1)">
-        <serverdata>
-          <mappings>
-            <mapping deploy="/home/data/sgmse" local="$PROJECT_DIR$" />
-          </mappings>
-        </serverdata>
-      </paths>
-      <paths name="zlf@222.197.214.101:22">
-        <serverdata>
-          <mappings>
-            <mapping deploy="/home/data/zlf/sgmse" local="$PROJECT_DIR$" />
-          </mappings>
-        </serverdata>
-      </paths>
-      <paths name="zlf@222.197.219.26:22">
-        <serverdata>
-          <mappings>
-            <mapping deploy="/home/zlf/sgmse" local="$PROJECT_DIR$" />
+            <mapping deploy="/home/ubuntu/python-project/SLDGM-SE" local="$PROJECT_DIR$" />
           </mappings>
         </serverdata>
       </paths>
     </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
   </component>
 </project>
