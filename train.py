@@ -1,4 +1,5 @@
 import argparse
+import os.path
 from argparse import ArgumentParser
 
 import pytorch_lightning as pl
@@ -28,8 +29,9 @@ if __name__ == '__main__':
     base_parser = ArgumentParser(add_help=False)
     parser = ArgumentParser()
     for parser_ in (base_parser, parser):
-        parser_.add_argument("--backbone", type=str, choices=BackboneRegistry.get_all_names(), default="ffcunet")
+        parser_.add_argument("--backbone", type=str, choices=BackboneRegistry.get_all_names(), default="ncsnpp")
         parser_.add_argument("--sde", type=str, choices=SDERegistry.get_all_names(), default="ouve")
+        parser_.add_argument("--logs", type=str, default="tensorboard")
         parser_.add_argument("--no_wandb", action='store_true',
                              help="Turn off logging to W&B, using local default logger instead")
 
@@ -66,9 +68,9 @@ if __name__ == '__main__':
 
     # Set up logger configuration
     if args.no_wandb:
-        logger = TensorBoardLogger(save_dir="logs", name="tensorboard")
+        logger = TensorBoardLogger(save_dir="logs", name=args.logs)
     else:
-        logger = WandbLogger(project="sgmse", log_model=True, save_dir="logs")
+        logger = WandbLogger(project=args.logs, log_model=True, save_dir="logs")
         logger.experiment.log_code(".")
 
     # Set up callbacks for logger
@@ -92,7 +94,7 @@ if __name__ == '__main__':
         callbacks=callbacks,
         auto_scale_batch_size=True,
         auto_lr_find=True,
-        weights_save_path='/home/ubuntu/python-project/SLDGM-SE/checkpoints',
+        weights_save_path=os.path.join('/home/ubuntu/python-project/SLDGM-SE/checkpoints', args.logs),
         detect_anomaly=True,
         accumulate_grad_batches=8,
     )
