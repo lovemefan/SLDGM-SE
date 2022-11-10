@@ -10,7 +10,7 @@ import torch
 import numpy as np
 
 from sldgmse.backbones.dcunet import OnReIm, get_activation
-from sldgmse.backbones.modules.ffc import  FFC_BN_ACT
+from sldgmse.backbones.modules.ffc import FFC_BN_ACT
 from sldgmse.backbones.shared import GaussianFourierProjection, DiffusionStepEmbedding, ComplexLinear
 
 
@@ -20,6 +20,7 @@ class FFCResidualBlocks(nn.Module):
                  kernel_size,
                  alpha,
                  t_emb_dim=None,
+                 dropout=0.1
                  ):
         """
         Args:
@@ -31,14 +32,26 @@ class FFCResidualBlocks(nn.Module):
 
         self.ffc1 = FFC_BN_ACT(in_channels, in_channels, kernel_size, alpha, alpha, padding=1)
         self.ffc2 = FFC_BN_ACT(in_channels, in_channels, kernel_size, alpha, alpha, padding=1)
+        self.GroupNorm_0 = nn.GroupNorm(num_groups=min(in_channels // 4, 32), num_channels=in_channels, eps=1e-6)
+        self.Dropout_0 = nn.Dropout(dropout)
+        self.act = nn.SiLU()
 
         if t_emb_dim is not None:
             self.Dense_0 = nn.Linear(t_emb_dim, in_channels)
-            self.act = nn.SiLU()
+
+    def group_norm(self, x):
+
+        if type(x) is tuple:
+            x_l_size, x_g_size = x[0].size()[1], x[1].size()[1]
+            x = torch.concat((x[0], x[1]), dim=1)
+
+        x = self.act(self.GroupNorm_0(x))
+        x_l, x_g = torch.split(x, (x_l_size, x_g_size), dim=1)
+        return x_l, x_g
 
     def forward(self, x, t_emb=None):
         residual = x
-        x_l, x_g = self.ffc2(self.ffc1(x))
+        x_l, x_g = self.ffc2(self.group_norm(self.ffc1(x)))
 
         if type(residual) is tuple:
             channel = residual[0].size(1) + residual[1].size(1)
@@ -48,7 +61,7 @@ class FFCResidualBlocks(nn.Module):
             residual = residual.split([channel_l, channel_g], dim=1)
             if t_emb is not None:
                 t_emb = self.Dense_0(self.act(t_emb))[:, :, None, None]
-                x_l, x_g = torch.split(torch.concat((x_l, x_g), dim=1) + t_emb, (x_l.size()[1], x_g.size()[1]), dim=1)
+                x_l, x_g = torch.split(self.act(torch.concat((x_l, x_g), dim=1)) + t_emb, (x_l.size()[1], x_g.size()[1]), dim=1)
                 # x_l += t_emb[:, :x_l.size()[1]]
                 # x_g += t_emb[:, x_l.size()[1]:]
 
