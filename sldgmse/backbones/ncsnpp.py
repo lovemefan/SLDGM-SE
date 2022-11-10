@@ -63,7 +63,7 @@ class NCSNpp(nn.Module):
         image_size = 256,
         embedding_type = 'fourier',
         dropout = .0,
-        centered = False,
+        centered = True,
         **unused_kwargs
     ):
         super().__init__()
