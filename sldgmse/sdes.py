@@ -338,10 +338,6 @@ class Poisson:
 
         return parser
 
-    @property
-    def M(self):
-        return self.M
-
     def prior_sampling(self, shape):
         """
         Sampling initial data from p_prior on z=z_max hyperplane.
